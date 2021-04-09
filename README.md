@@ -1,2 +1,3 @@
-# time_series_utils
-A repo to store some time series utility functions
+# Introduction 
+This repo stores the time series forecasting tutorials code and resources.
+
