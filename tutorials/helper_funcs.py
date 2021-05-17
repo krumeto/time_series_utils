@@ -49,6 +49,10 @@ def merge_datasets(energy_df, temp_df):
 def resample_as_needed(df, freq = 'D'):
     return df.set_index('time').resample(freq).mean()
 
+def add_first_day_of_month(df, col):
+  df[f'{col}_mm'] = df[col] + pd.offsets.Day() - pd.offsets.MonthBegin()
+  return df
+
 if __name__ == "__main__":
      
     pass
