@@ -53,6 +53,92 @@ def add_first_day_of_month(df, col):
   df[f'{col}_mm'] = df[col] + pd.offsets.Day() - pd.offsets.MonthBegin()
   return df
 
+
+
+# lockdown1 = pd.DataFrame({
+#   'holiday': 'lockdown1',
+#   'ds': pd.to_datetime(["2020-03-11"]),
+#   'upper_window': 68,
+# })
+
+# m = Prophet(holidays=lockdown1)
+
+def clipping(df, lower, upper):
+  df.y = df.y.clip(lower=df.y.quantile(lower), upper=df.y.quantile(upper))
+  return df
+
+import os
+import yaml
+
+class suppress_stdout_stderr(object):
+    """
+    https://github.com/joblib/joblib/issues/868
+    A context manager for doing a "deep suppression" of stdout and stderr in
+    Python, i.e. will suppress all print, even if the print originates in a
+    compiled C/Fortran sub-function.
+       This will not suppress raised exceptions, since exceptions are printed
+    to stderr just before a script exits, and after the context manager has
+    exited (at least, I think that is why it lets exceptions through).
+    """
+    def __init__(self):
+        # Open a pair of null files
+        self.null_fds = [os.open(os.devnull, os.O_RDWR) for x in range(2)]
+        # Save the actual stdout (1) and stderr (2) file descriptors.
+        self.save_fds = [os.dup(1), os.dup(2)]
+
+    def __enter__(self):
+        # Assign the null pointers to stdout and stderr.
+        os.dup2(self.null_fds[0], 1)
+        os.dup2(self.null_fds[1], 2)
+
+    def __exit__(self, *_):
+        # Re-assign the real stdout/stderr back to (1) and (2)
+        os.dup2(self.save_fds[0], 1)
+        os.dup2(self.save_fds[1], 2)
+        # Close the null files
+        for fd in self.null_fds + self.save_fds:
+            os.close(fd)
+
+
+def add_covid_baseline_to_timeseries(df, timeseries_column):
+    """Takes a dataframe and a timeseries column of datetime type and adds to it a covid_baseline 
+    where covid months are 1 and all the rest are 0
+    
+    If lockdown is set to True, April-20 is set to 3 in the series, while March and May are set to 2.
+    
+    """
+    
+    if not is_datetime64_any_dtype(df[timeseries_column]):
+        print("The provided column is not of datetime format. Results might be unpredictable")
+    
+    covid_series = ((df[timeseries_column] > pd.to_datetime('2020-03-01')) &
+                    (df[timeseries_column] < pd.to_datetime('2021-12-01')) 
+                   ).astype('int')
+    
+    covid_series = covid_series.rename('covid_baseline')
+    
+    return pd.concat([df,covid_series], axis=1)
+  
+def add_shutdown_baseline_to_timeseries(df, timeseries_column):
+    """Takes a dataframe and a timeseries column of datetime type and adds to it a covid_baseline 
+    where covid months are 1 and all the rest are 0
+    
+    If lockdown is set to True, April-20 is set to 3 in the series, while March and May are set to 2.
+    
+    """
+    
+    if not is_datetime64_any_dtype(df[timeseries_column]):
+        print("The provided column is not of datetime format. Results might be unpredictable")
+    
+    covid_series = ((df[timeseries_column] > pd.to_datetime('2020-03-15')) &
+                    (df[timeseries_column] < pd.to_datetime('2020-06-15')) 
+                   ).astype('int')
+    
+    covid_series = covid_series.rename('shut_down')
+    
+    return pd.concat([df,covid_series], axis=1)
+
+
 if __name__ == "__main__":
      
     pass
