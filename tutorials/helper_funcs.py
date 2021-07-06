@@ -53,7 +53,8 @@ def add_first_day_of_month(df, col):
   df[f'{col}_mm'] = df[col] + pd.offsets.Day() - pd.offsets.MonthBegin()
   return df
 
-
+def get_month_end(date):
+  return pd.to_datetime(date) - pd.offsets.Day() + pd.offsets.MonthEnd()
 
 # lockdown1 = pd.DataFrame({
 #   'holiday': 'lockdown1',
