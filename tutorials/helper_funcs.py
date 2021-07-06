@@ -56,6 +56,9 @@ def add_first_day_of_month(df, col):
 def get_month_end(date):
   return pd.to_datetime(date) - pd.offsets.Day() + pd.offsets.MonthEnd()
 
+def get_last_n_month_ends(date, n, slide =1):
+  return [get_month_end(date) - pd.offsets.MonthEnd(i+slide) for i in range(n)]
+
 # lockdown1 = pd.DataFrame({
 #   'holiday': 'lockdown1',
 #   'ds': pd.to_datetime(["2020-03-11"]),
