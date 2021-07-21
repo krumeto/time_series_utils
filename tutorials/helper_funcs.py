@@ -59,6 +59,13 @@ def get_month_end(date):
 def get_last_n_month_ends(date, n, slide =1):
   return [get_month_end(date) - pd.offsets.MonthEnd(i+slide) for i in range(n)]
 
+def clipping(df, lower, upper):
+  df.y = df.y.clip(lower=df.y.quantile(lower), upper=df.y.quantile(upper))
+  return df
+
+def get_first_days(df):
+    return df.assign(month_start = ((df['ds'].dt.day < 6)).astype(int))
+
 # lockdown1 = pd.DataFrame({
 #   'holiday': 'lockdown1',
 #   'ds': pd.to_datetime(["2020-03-11"]),
@@ -70,6 +77,95 @@ def get_last_n_month_ends(date, n, slide =1):
 def clipping(df, lower, upper):
   df.y = df.y.clip(lower=df.y.quantile(lower), upper=df.y.quantile(upper))
   return df
+
+def _create_dataframe(df):
+  data_date_range = pd.date_range(start=df["discharge_date"].min(), end = min(df["discharge_date"].max(), pd.to_datetime(date.today())), freq='d')
+  
+  return pd.DataFrame({'ds':data_date_range})
+
+def get_last_days(df):
+    return df.assign(month_end = (df.ds == (df.ds + MonthEnd(0) )).astype(int) )
+
+
+def filter_data(grouped_df, facility, patient_type,group_col = 'patient_type' ):
+  
+  sample = grouped_df.loc[
+                 (grouped_df["facility"] == facility) & 
+                 (grouped_df[group_col] == patient_type)]
+  
+  y = sample.set_index('discharge_date').accounts
+  y.name= 'y'
+  
+  output = _create_dataframe(sample).merge(y,
+                                    left_on = 'ds',
+                                    right_index=True,
+                                    how='left'
+                                  )
+  output.y = output.y.fillna(0)
+  
+  return output
+
+
+def plot_combo_forecast(grouped_data, combo, start_date):
+  
+  test_series = filter_data(grouped_data, combo[0], combo[1])
+
+  m = Prophet()
+  m.add_country_holidays('US')
+  m.add_regressor('month_end')
+
+  m.fit(test_series.loc[test_series.ds > start_date].pipe(get_last_days))
+
+  future = m.make_future_dataframe(periods=31).pipe(get_last_days)
+  
+  forecast = m.predict(future)
+  forecast['facility'] = combo[0]
+  forecast['patient_type'] = combo[1]
+  
+  for y in ['yhat', 'yhat_lower', 'yhat_upper']:
+    forecast[y] = forecast[y].clip(lower=0)
+  
+  m.plot(forecast);
+  m.plot_components(forecast);
+
+  cutoffs = pd.to_datetime(['2020-11-01', '2020-12-01', '2021-01-01', '2021-02-01'])
+  df_cv = cross_validation(m, cutoffs=cutoffs, horizon='31 days', parallel = 'processes')
+  df_p = performance_metrics(df_cv,rolling_window=1)
+  print('#########################################################################')
+  print('Cross-val metrics:')
+  print(df_p)
+
+  
+def filter_forecast(forecast,facility, patient_type):
+  X_hat = forecast.loc[(forecast.facility == facility) & (forecast.patient_type == patient_type)]
+  subset = X_hat.loc[:, ['ds', 'yhat']]
+  subset['ds'] = pd.to_datetime(subset['ds'])
+  
+  return subset
+
+
+def compare_forecasts(actuals, forecasts,facility, patient_type, resample=False):
+  
+  X = filter_data(actuals, facility, patient_type).reset_index(drop='False')
+  X_hat = filter_forecast(forecasts, facility, patient_type).reset_index(drop='False')
+  
+  results = X.merge(
+                    X_hat,
+                    left_on='ds',
+                    right_on='ds', how='outer'  
+  )
+  
+  if resample:
+    results = results.set_index('ds').resample('W').sum().reset_index()
+  
+  error = (abs(results.y - results.yhat)/results.y).mean()
+  
+  results.set_index('ds').loc["2020-05-31":].plot(title=f"{facility} {patient_type} MAPE: {error:.2%}")
+  plt.show()
+  results.set_index('ds').iloc[-60:].plot(title=f"Recent 2 months {facility} {patient_type} MAPE: {error:.2%}")
+  plt.show()
+  
+  return results
 
 import os
 import yaml
